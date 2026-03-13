@@ -12,6 +12,9 @@ In other words: a scanner can hallucinate, overfit, panic, or boast. Blackhole k
 
 And every white hat should remember: all requests eventually fall into the black hole.
 
+![ZT Blackhole logo](blackhole-screen.jpg)
+
+
 ## General idea
 
 Most scanner demos are too clean, too shallow, or too theatrical. Real targets are noisy. Controls matter. False positives matter. Second-order flows matter. “Looks vulnerable” is not the same as “is vulnerable.”
