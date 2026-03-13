@@ -1,0 +1,2735 @@
+name: starter-pack
+version: 0.6.0
+profiles:
+- id: builtin-reflected-xss
+  case_id: demo-reflected-xss
+  title: Reflected XSS in search
+  tags:
+  - xss
+  - demo
+  source_name: Blackhole Demo
+  source_url: https://example.invalid/blackhole/demo-reflected-xss
+  matcher:
+    method: GET
+    path: /search
+    query:
+      q: any
+  response:
+    status: 200
+    headers:
+      Content-Type: text/html; charset=utf-8
+    body_template: "<html>\n  <body>\n    <h1>Search results</h1>\n    <div id=\"\
+      results\">You searched for: {{ query.q }}</div>\n  </body>\n</html>\n"
+  truth:
+    vuln_class: xss.reflected
+    positive_evidence:
+    - unencoded reflection of user-controlled input in HTML body context
+    guardrails:
+    - HTML-encoded reflection alone is not enough to call XSS
+    manual_followup:
+    - verify script execution in a browser context
+    confidence_cap: medium
+    emulation_grade: replayable
+    automation_grade: browser_assisted
+    north_star_section: xss
+- id: builtin-open-redirect
+  case_id: demo-open-redirect
+  title: Open redirect via next parameter
+  tags:
+  - redirect
+  - demo
+  source_name: Blackhole Demo
+  source_url: https://example.invalid/blackhole/demo-open-redirect
+  matcher:
+    method: GET
+    path: /redirect
+    query:
+      next: any
+  response:
+    status: 302
+    headers:
+      Location: '{{ query.next }}'
+    body_template: redirecting
+  truth:
+    vuln_class: redirect.open
+    positive_evidence:
+    - attacker-controlled redirect target is accepted without validation
+    guardrails:
+    - relative internal redirect alone may be non-exploitable
+    confidence_cap: medium
+    emulation_grade: replayable
+    automation_grade: signature
+    north_star_section: redirect
+- id: builtin-cors-permissive
+  case_id: demo-cors-permissive
+  title: Permissive CORS with credentials
+  tags:
+  - cors
+  - demo
+  source_name: Blackhole Demo
+  source_url: https://example.invalid/blackhole/demo-cors-permissive
+  matcher:
+    method: GET
+    path: /api/account
+    headers:
+      origin: any
+  response:
+    status: 200
+    headers:
+      Content-Type: application/json
+      Access-Control-Allow-Origin: '{{ headers.Origin or headers.origin }}'
+      Access-Control-Allow-Credentials: 'true'
+    body_template: '{"email": "alice@example.org", "balance": 1337}
+
+      '
+  truth:
+    vuln_class: cors.permissive
+    positive_evidence:
+    - arbitrary Origin is reflected while credentials are allowed
+    guardrails:
+    - wildcard ACAO without credentials is weaker evidence
+    confidence_cap: medium
+    emulation_grade: replayable
+    automation_grade: signature
+    north_star_section: cors
+- id: builtin-sqli-error
+  case_id: demo-sqli-error
+  title: SQL error disclosure in product lookup
+  tags:
+  - sqli
+  - demo
+  source_name: Blackhole Demo
+  source_url: https://example.invalid/blackhole/demo-sqli-error
+  matcher:
+    method: GET
+    path: /product
+    query:
+      id: any
+  response:
+    status: 500
+    headers:
+      Content-Type: text/html; charset=utf-8
+    body_template: '<html><body>SQLSTATE[42000]: syntax error near ''{{ query.id }}''</body></html>
+
+      '
+  truth:
+    vuln_class: sqli
+    positive_evidence:
+    - SQL parser error with attacker-controlled token
+    guardrails:
+    - generic 500 alone is not enough
+    confidence_cap: medium
+    emulation_grade: replayable
+    automation_grade: signature
+    north_star_section: injection
+- id: builtin-graphql-introspection
+  case_id: demo-graphql-introspection
+  title: GraphQL introspection enabled
+  tags:
+  - graphql
+  - demo
+  source_name: Blackhole Demo
+  source_url: https://example.invalid/blackhole/demo-graphql-introspection
+  matcher:
+    method: POST
+    path: /graphql
+    body_contains: __schema
+  response:
+    status: 200
+    headers:
+      Content-Type: application/json
+    body_template: '{"data":{"__schema":{"queryType":{"name":"Query"},"types":[{"name":"Query"},{"name":"User"},{"name":"Secret"}]}}}
+
+      '
+  truth:
+    vuln_class: graphql.introspection-enabled
+    positive_evidence:
+    - __schema query succeeds
+    confidence_cap: high
+    emulation_grade: replayable
+    automation_grade: signature
+    north_star_section: graphql
+- id: builtin-path-traversal
+  case_id: demo-path-traversal
+  title: Path traversal to sensitive file
+  tags:
+  - file-access
+  - demo
+  source_name: Blackhole Demo
+  source_url: https://example.invalid/blackhole/demo-path-traversal
+  matcher:
+    method: GET
+    path: /download
+    query:
+      file:
+        regex: .*(\.\./|%2e%2e%2f).*
+  response:
+    status: 200
+    headers:
+      Content-Type: text/plain; charset=utf-8
+    body_template: 'root:x:0:0:root:/root:/bin/bash
+
+      daemon:x:1:1:daemon:/usr/sbin:/usr/sbin/nologin
+
+      '
+  truth:
+    vuln_class: path-traversal
+    positive_evidence:
+    - traversal payload yields sensitive file content
+    guardrails:
+    - 200 with empty body is not enough
+    confidence_cap: high
+    emulation_grade: replayable
+    automation_grade: signature
+    north_star_section: file-access
+- id: builtin-secret-leak
+  case_id: demo-secret-leak
+  title: Exposed config with secrets
+  tags:
+  - secrets
+  - demo
+  source_name: Blackhole Demo
+  source_url: https://example.invalid/blackhole/demo-secret-leak
+  matcher:
+    method: GET
+    path: /.env
+  response:
+    status: 200
+    headers:
+      Content-Type: text/plain; charset=utf-8
+    body_template: 'APP_ENV=production
+
+      DB_PASSWORD=supersecret-password
+
+      AWS_SECRET_ACCESS_KEY=EXAMPLESECRET123
+
+      '
+  truth:
+    vuln_class: secrets.file-exposure
+    positive_evidence:
+    - high-value secret material is retrievable without auth
+    confidence_cap: high
+    emulation_grade: replayable
+    automation_grade: signature
+    north_star_section: secrets
+- id: builtin-store-comment
+  case_id: demo-stored-xss-step1
+  title: Store a comment that will later render
+  tags:
+  - xss
+  - stateful
+  - demo
+  source_name: Blackhole Demo
+  source_url: https://example.invalid/blackhole/demo-stored-xss
+  matcher:
+    method: POST
+    path: /api/comments
+    json_fields:
+    - path: $.comment
+      present: true
+  response:
+    status: 201
+    headers:
+      Content-Type: application/json
+    body_template: '{"stored": true, "message": "comment accepted"}
+
+      '
+  scenario:
+    name: stored-xss-flow
+    required_state: STARTED
+    next_state: COMMENT_STORED
+  truth:
+    vuln_class: xss.stored
+    positive_evidence:
+    - attacker-controlled comment is accepted for later rendering
+    manual_followup:
+    - fetch /comments and verify rendering context
+    confidence_cap: medium
+    emulation_grade: stateful
+    automation_grade: browser_assisted
+    north_star_section: xss
+- id: builtin-render-comments
+  case_id: demo-stored-xss-step2
+  title: Render stored comments
+  tags:
+  - xss
+  - stateful
+  - demo
+  source_name: Blackhole Demo
+  source_url: https://example.invalid/blackhole/demo-stored-xss
+  matcher:
+    method: GET
+    path: /comments
+  response:
+    status: 200
+    headers:
+      Content-Type: text/html; charset=utf-8
+    body_template: '<html><body>
+
+      <h1>Comments</h1>
+
+      {% for comment in memory.comments or [] %}
+
+      <div class="comment">{{ comment }}</div>
+
+      {% endfor %}
+
+      </body></html>
+
+      '
+  truth:
+    vuln_class: xss.stored
+    positive_evidence:
+    - previously supplied comment is reflected from server-side storage
+    guardrails:
+    - no stored payload observed means no stored XSS proof yet
+    manual_followup:
+    - verify browser execution if the payload is script-capable
+    confidence_cap: medium
+    emulation_grade: stateful
+    automation_grade: browser_assisted
+    north_star_section: xss
+- id: builtin-webhook-register
+  case_id: demo-webhook-ssrf
+  title: Register outbound webhook target (vulnerable)
+  tags:
+  - ssrf
+  - webhook
+  - stateful
+  - second-order
+  - demo
+  source_name: Blackhole Built-in
+  source_url: https://example.invalid/blackhole/builtin
+  matcher:
+    method: POST
+    path: /api/webhooks/register
+    json_fields:
+    - path: $.target_url
+      present: true
+  response:
+    status: 201
+    headers:
+      Content-Type: application/json
+    body_template: '{"registered": true, "mode": "vulnerable"}'
+  truth:
+    vuln_class: ssrf.webhook-registration
+    positive_evidence:
+    - attacker-controlled webhook URL is stored for later server-side delivery
+    guardrails:
+    - URL storage alone is not enough without a later delivery sink
+    manual_followup:
+    - trigger the webhook to observe internal fetch behavior
+    confidence_cap: medium
+    emulation_grade: stateful
+    automation_grade: signature_plus_state
+    north_star_section: ssrf
+    delayed_effect: true
+    second_order: true
+    second_order_sink: webhook-delivery
+    requires_repeat: true
+  notes: &id001
+  - Explicit built-in second-order flow.
+- id: builtin-webhook-register-safe
+  case_id: demo-webhook-ssrf-safe
+  title: Register outbound webhook target (safe control)
+  tags:
+  - ssrf
+  - webhook
+  - stateful
+  - control
+  - demo
+  source_name: Blackhole Built-in
+  source_url: https://example.invalid/blackhole/builtin
+  matcher:
+    method: POST
+    path: /api/webhooks/register-safe
+    json_fields:
+    - path: $.target_url
+      present: true
+  response:
+    status: 201
+    headers:
+      Content-Type: application/json
+    body_template: '{"registered": true, "mode": "safe"}'
+  truth:
+    vuln_class: ssrf.webhook-registration-safe
+    positive_evidence:
+    - safe control stores target but later applies policy checks
+    guardrails:
+    - must not claim SSRF if internal target is blocked at delivery time
+    must_not_claim:
+    - ssrf
+    - rfi
+    - lfi
+    confidence_cap: low
+    emulation_grade: stateful
+    automation_grade: signature_plus_state
+    north_star_section: ssrf
+    delayed_effect: true
+    second_order: true
+    second_order_sink: webhook-delivery
+    requires_repeat: true
+  notes: *id001
+- id: builtin-webhook-trigger
+  case_id: demo-webhook-ssrf
+  title: Deliver webhook event using stored target
+  tags:
+  - ssrf
+  - webhook
+  - stateful
+  - second-order
+  - demo
+  source_name: Blackhole Built-in
+  source_url: https://example.invalid/blackhole/builtin
+  matcher:
+    method: GET
+    path: /api/webhooks/trigger
+    query:
+      event: any
+  response:
+    status: 200
+    headers:
+      Content-Type: application/json
+    body_template: '{"delivered": true, "internal_fetch": true}'
+  truth:
+    vuln_class: ssrf.webhook-delivery
+    positive_evidence:
+    - triggering a later event causes the server to fetch the previously stored target
+      URL
+    guardrails:
+    - external delivery alone is weaker than internal fetch or metadata access
+    manual_followup:
+    - compare with /api/webhooks/trigger-safe
+    confidence_cap: high
+    emulation_grade: stateful
+    automation_grade: signature_plus_state
+    north_star_section: ssrf
+    delayed_effect: true
+    second_order: true
+    second_order_sink: webhook-delivery
+    requires_repeat: true
+  notes: *id001
+- id: builtin-webhook-trigger-safe
+  case_id: demo-webhook-ssrf-safe
+  title: Deliver webhook event with policy enforcement
+  tags:
+  - ssrf
+  - webhook
+  - stateful
+  - control
+  - demo
+  source_name: Blackhole Built-in
+  source_url: https://example.invalid/blackhole/builtin
+  matcher:
+    method: GET
+    path: /api/webhooks/trigger-safe
+    query:
+      event: any
+  response:
+    status: 403
+    headers:
+      Content-Type: application/json
+    body_template: '{"blocked_by_policy": true}'
+  truth:
+    vuln_class: ssrf.webhook-delivery-safe
+    positive_evidence:
+    - safe control blocks internal webhook targets at delivery time
+    guardrails:
+    - must not claim SSRF when blocked_by_policy is true
+    must_not_claim:
+    - ssrf
+    confidence_cap: low
+    emulation_grade: stateful
+    automation_grade: signature_plus_state
+    north_star_section: ssrf
+    delayed_effect: true
+    second_order: true
+    second_order_sink: webhook-delivery
+    requires_repeat: true
+  notes: *id001
+- id: builtin-import-configure
+  case_id: demo-import-ssrf
+  title: Configure remote import source (vulnerable)
+  tags:
+  - ssrf
+  - import
+  - stateful
+  - second-order
+  - demo
+  source_name: Blackhole Built-in
+  source_url: https://example.invalid/blackhole/builtin
+  matcher:
+    method: POST
+    path: /api/imports/configure
+    json_fields:
+    - path: $.source_url
+      present: true
+  response:
+    status: 201
+    headers:
+      Content-Type: application/json
+    body_template: '{"configured": true, "mode": "vulnerable"}'
+  truth:
+    vuln_class: ssrf.import-configuration
+    positive_evidence:
+    - attacker-controlled import source is stored for a later server-side fetch
+    guardrails:
+    - configuration without execution is only partial evidence
+    manual_followup:
+    - run the import to observe fetch/file-read behavior
+    confidence_cap: medium
+    emulation_grade: stateful
+    automation_grade: signature_plus_state
+    north_star_section: ssrf
+    delayed_effect: true
+    second_order: true
+    second_order_sink: remote-import
+    requires_repeat: true
+  notes: *id001
+- id: builtin-import-configure-safe
+  case_id: demo-import-ssrf-safe
+  title: Configure remote import source (safe control)
+  tags:
+  - ssrf
+  - import
+  - stateful
+  - control
+  - demo
+  source_name: Blackhole Built-in
+  source_url: https://example.invalid/blackhole/builtin
+  matcher:
+    method: POST
+    path: /api/imports/configure-safe
+    json_fields:
+    - path: $.source_url
+      present: true
+  response:
+    status: 201
+    headers:
+      Content-Type: application/json
+    body_template: '{"configured": true, "mode": "safe"}'
+  truth:
+    vuln_class: ssrf.import-configuration-safe
+    positive_evidence:
+    - safe control stores source but later blocks unsafe schemes or internal hosts
+    guardrails:
+    - must not claim SSRF or file-read if safe run blocks the source
+    must_not_claim:
+    - ssrf
+    - file-access
+    confidence_cap: low
+    emulation_grade: stateful
+    automation_grade: signature_plus_state
+    north_star_section: ssrf
+    delayed_effect: true
+    second_order: true
+    second_order_sink: remote-import
+    requires_repeat: true
+  notes: *id001
+- id: builtin-import-run
+  case_id: demo-import-ssrf
+  title: Execute configured remote import
+  tags:
+  - ssrf
+  - import
+  - stateful
+  - second-order
+  - demo
+  source_name: Blackhole Built-in
+  source_url: https://example.invalid/blackhole/builtin
+  matcher:
+    method: GET
+    path: /api/imports/run
+    query:
+      job: any
+  response:
+    status: 200
+    headers:
+      Content-Type: application/json
+    body_template: '{"imported": true, "internal_fetch": true, "local_file_read":
+      true}'
+  truth:
+    vuln_class: ssrf.import-execution
+    positive_evidence:
+    - later import execution dereferences the stored source and may reach internal
+      hosts or local files
+    guardrails:
+    - import success alone is weaker than internal fetch or local file preview
+    manual_followup:
+    - compare with /api/imports/run-safe
+    confidence_cap: high
+    emulation_grade: stateful
+    automation_grade: signature_plus_state
+    north_star_section: ssrf
+    delayed_effect: true
+    second_order: true
+    second_order_sink: remote-import
+    requires_repeat: true
+  notes: *id001
+- id: builtin-import-run-safe
+  case_id: demo-import-ssrf-safe
+  title: Execute configured remote import with policy enforcement
+  tags:
+  - ssrf
+  - import
+  - stateful
+  - control
+  - demo
+  source_name: Blackhole Built-in
+  source_url: https://example.invalid/blackhole/builtin
+  matcher:
+    method: GET
+    path: /api/imports/run-safe
+    query:
+      job: any
+  response:
+    status: 403
+    headers:
+      Content-Type: application/json
+    body_template: '{"blocked_by_policy": true}'
+  truth:
+    vuln_class: ssrf.import-execution-safe
+    positive_evidence:
+    - safe control prevents internal hosts and local file schemes during import
+    guardrails:
+    - must not claim SSRF if blocked_by_policy is true
+    must_not_claim:
+    - ssrf
+    - file-access
+    confidence_cap: low
+    emulation_grade: stateful
+    automation_grade: signature_plus_state
+    north_star_section: ssrf
+    delayed_effect: true
+    second_order: true
+    second_order_sink: remote-import
+    requires_repeat: true
+  notes: *id001
+- id: builtin-oauth-register-client
+  case_id: demo-oauth-redirect
+  title: Register OAuth client redirect URI
+  tags:
+  - auth
+  - oauth
+  - stateful
+  - second-order
+  - demo
+  source_name: Blackhole Built-in
+  source_url: https://example.invalid/blackhole/builtin
+  matcher:
+    method: POST
+    path: /oauth/register-client
+    json_fields:
+    - path: $.redirect_uri
+      present: true
+  response:
+    status: 201
+    headers:
+      Content-Type: application/json
+    body_template: '{"registered": true}'
+  truth:
+    vuln_class: auth.oauth.client-registration
+    positive_evidence:
+    - client redirect_uri is stored for later authorization decisions
+    guardrails:
+    - registration alone is incomplete until authorization occurs
+    manual_followup:
+    - run /oauth/authorize or /oauth/authorize-safe
+    confidence_cap: medium
+    emulation_grade: stateful
+    automation_grade: signature_plus_state
+    north_star_section: auth
+    delayed_effect: true
+    second_order: true
+    second_order_sink: oauth-authorization
+    requires_repeat: true
+  notes: *id001
+- id: builtin-oauth-authorize
+  case_id: demo-oauth-redirect
+  title: OAuth authorization code leaked to attacker-controlled redirect_uri
+  tags:
+  - auth
+  - oauth
+  - stateful
+  - second-order
+  - demo
+  source_name: Blackhole Built-in
+  source_url: https://example.invalid/blackhole/builtin
+  matcher:
+    method: GET
+    path: /oauth/authorize
+    query:
+      client_id: any
+      redirect_uri: any
+  response:
+    status: 302
+    headers:
+      Location: '{{ query.redirect_uri }}?code=bhcode-demo&state=xyz'
+    body_template: redirecting
+  truth:
+    vuln_class: auth.oauth.redirect-uri-misvalidation
+    positive_evidence:
+    - authorization code is issued to attacker-controlled or weakly validated redirect_uri
+    guardrails:
+    - mere presence of redirect_uri param is not enough without code leakage or unsafe
+      redirect behavior
+    manual_followup:
+    - compare with /oauth/authorize-safe
+    confidence_cap: high
+    emulation_grade: stateful
+    automation_grade: signature_plus_state
+    north_star_section: auth
+    delayed_effect: true
+    second_order: true
+    second_order_sink: oauth-authorization
+    requires_repeat: true
+  notes: *id001
+- id: builtin-oauth-authorize-safe
+  case_id: demo-oauth-redirect-safe
+  title: OAuth authorization with exact redirect_uri validation
+  tags:
+  - auth
+  - oauth
+  - stateful
+  - control
+  - demo
+  source_name: Blackhole Built-in
+  source_url: https://example.invalid/blackhole/builtin
+  matcher:
+    method: GET
+    path: /oauth/authorize-safe
+    query:
+      client_id: any
+      redirect_uri: any
+  response:
+    status: 400
+    headers:
+      Content-Type: application/json
+    body_template: '{"error":"redirect_uri mismatch","exact_match_required":true}'
+  truth:
+    vuln_class: auth.oauth.redirect-uri-safe
+    positive_evidence:
+    - safe control rejects redirect_uri mismatch and requires exact match
+    guardrails:
+    - must not claim open redirect or OAuth code leak when exact match is enforced
+    must_not_claim:
+    - redirect
+    - auth.oauth.redirect-uri-misvalidation
+    confidence_cap: low
+    emulation_grade: stateful
+    automation_grade: signature_plus_state
+    north_star_section: auth
+    delayed_effect: true
+    second_order: true
+    second_order_sink: oauth-authorization
+    requires_repeat: true
+  notes: *id001
+- id: builtin-basic-auth
+  case_id: baseline-basic-auth
+  title: HTTP Basic auth challenge discovered
+  tags:
+  - auth
+  - baseline
+  - legacy
+  source_name: Blackhole Baseline
+  source_url: https://example.invalid/blackhole/baseline
+  matcher:
+    method: GET
+    path: /auth/basic
+  response:
+    status: 401
+    headers:
+      Content-Type: text/html; charset=utf-8
+      WWW-Authenticate: Basic realm="legacy-panel"
+    body_template: <html><body><h1>401 Unauthorized</h1><p>Basic auth required.</p></body></html>
+  truth:
+    vuln_class: auth.http.basic
+    positive_evidence:
+    - '401 with WWW-Authenticate: Basic realm challenge'
+    guardrails:
+    - Basic auth presence alone is not brute-force or default-credential evidence
+    must_not_claim: []
+    confidence_cap: medium
+    emulation_grade: replayable
+    automation_grade: signature
+    north_star_section: auth
+  notes: []
+- id: builtin-digest-auth
+  case_id: baseline-digest-auth
+  title: HTTP Digest auth challenge discovered
+  tags:
+  - auth
+  - baseline
+  - legacy
+  source_name: Blackhole Baseline
+  source_url: https://example.invalid/blackhole/baseline
+  matcher:
+    method: GET
+    path: /auth/digest
+  response:
+    status: 401
+    headers:
+      Content-Type: text/html; charset=utf-8
+      WWW-Authenticate: Digest realm="legacy-api", nonce="deadbeef", qop="auth"
+    body_template: <html><body><h1>401 Unauthorized</h1><p>Digest auth required.</p></body></html>
+  truth:
+    vuln_class: auth.http.digest
+    positive_evidence:
+    - '401 with WWW-Authenticate: Digest challenge'
+    guardrails: []
+    must_not_claim: []
+    confidence_cap: medium
+    emulation_grade: replayable
+    automation_grade: signature
+    north_star_section: auth
+  notes: []
+- id: builtin-ntlm-auth
+  case_id: baseline-ntlm-auth
+  title: HTTP NTLM challenge discovered
+  tags:
+  - auth
+  - baseline
+  - legacy
+  source_name: Blackhole Baseline
+  source_url: https://example.invalid/blackhole/baseline
+  matcher:
+    method: GET
+    path: /auth/ntlm
+  response:
+    status: 401
+    headers:
+      Content-Type: text/html; charset=utf-8
+      WWW-Authenticate: NTLM
+    body_template: <html><body><h1>401 Unauthorized</h1><p>NTLM auth required.</p></body></html>
+  truth:
+    vuln_class: auth.http.ntlm
+    positive_evidence:
+    - '401 with WWW-Authenticate: NTLM challenge'
+    guardrails: []
+    must_not_claim: []
+    confidence_cap: medium
+    emulation_grade: replayable
+    automation_grade: signature
+    north_star_section: auth
+  notes: []
+- id: builtin-negotiate-auth
+  case_id: baseline-negotiate-auth
+  title: HTTP Negotiate challenge discovered
+  tags:
+  - auth
+  - baseline
+  - legacy
+  source_name: Blackhole Baseline
+  source_url: https://example.invalid/blackhole/baseline
+  matcher:
+    method: GET
+    path: /auth/negotiate
+  response:
+    status: 401
+    headers:
+      Content-Type: text/html; charset=utf-8
+      WWW-Authenticate: Negotiate
+    body_template: <html><body><h1>401 Unauthorized</h1><p>Negotiate auth required.</p></body></html>
+  truth:
+    vuln_class: auth.http.negotiate
+    positive_evidence:
+    - '401 with WWW-Authenticate: Negotiate challenge'
+    guardrails: []
+    must_not_claim: []
+    confidence_cap: medium
+    emulation_grade: replayable
+    automation_grade: signature
+    north_star_section: auth
+  notes: []
+- id: builtin-form-login-weak
+  case_id: baseline-form-login-weak
+  title: Form login without lockout and with username enumeration
+  tags:
+  - auth
+  - baseline
+  - bruteforce
+  source_name: Blackhole Baseline
+  source_url: https://example.invalid/blackhole/baseline
+  matcher:
+    method: POST
+    path: /login
+  response:
+    status: 401
+    headers:
+      Content-Type: application/json
+    body_template: '{"ok": false, "error": "invalid password", "username_exists":
+      true, "remaining_attempts": "unlimited"}'
+  truth:
+    vuln_class: auth.form.no-lockout
+    positive_evidence:
+    - repeated failed logins do not trigger lockout
+    - different errors reveal whether a username exists
+    guardrails:
+    - single 401 alone is not proof of brute-force weakness
+    must_not_claim: []
+    confidence_cap: medium
+    emulation_grade: stateful
+    automation_grade: signature_plus_state
+    north_star_section: auth
+  notes: []
+- id: builtin-form-login-safe
+  case_id: baseline-form-login-safe
+  title: Form login with generic errors and lockout control
+  tags:
+  - auth
+  - control
+  - bruteforce
+  source_name: Blackhole Baseline
+  source_url: https://example.invalid/blackhole/baseline
+  matcher:
+    method: POST
+    path: /login-safe
+  response:
+    status: 401
+    headers:
+      Content-Type: application/json
+    body_template: '{"ok": false, "error": "invalid credentials"}'
+  truth:
+    vuln_class: auth.form.lockout-present
+    positive_evidence:
+    - generic auth failure without enumeration
+    - lockout after repeated failures
+    guardrails: []
+    must_not_claim:
+    - auth.form.no-lockout
+    - auth.account-enumeration
+    confidence_cap: medium
+    emulation_grade: stateful
+    automation_grade: signature_plus_state
+    north_star_section: auth
+  notes: []
+- id: builtin-password-recovery-enum
+  case_id: baseline-password-recovery-enum
+  title: Password recovery user enumeration
+  tags:
+  - auth
+  - baseline
+  - enumeration
+  source_name: Blackhole Baseline
+  source_url: https://example.invalid/blackhole/baseline
+  matcher:
+    method: POST
+    path: /account/recover
+  response:
+    status: 200
+    headers:
+      Content-Type: application/json
+    body_template: '{"recovery": "sent", "user_exists": true}'
+  truth:
+    vuln_class: auth.account-enumeration
+    positive_evidence:
+    - password recovery response differs for existing vs unknown users
+    guardrails: []
+    must_not_claim: []
+    confidence_cap: medium
+    emulation_grade: stateful
+    automation_grade: signature_plus_state
+    north_star_section: auth
+  notes: []
+- id: builtin-password-recovery-safe
+  case_id: baseline-password-recovery-safe
+  title: Password recovery generic response control
+  tags:
+  - auth
+  - control
+  - enumeration
+  source_name: Blackhole Baseline
+  source_url: https://example.invalid/blackhole/baseline
+  matcher:
+    method: POST
+    path: /account/recover-safe
+  response:
+    status: 200
+    headers:
+      Content-Type: application/json
+    body_template: '{"accepted": true, "message": "If the account exists, recovery
+      instructions will be sent."}'
+  truth:
+    vuln_class: auth.account-enumeration-safe
+    positive_evidence:
+    - generic password recovery response
+    guardrails: []
+    must_not_claim:
+    - auth.account-enumeration
+    confidence_cap: medium
+    emulation_grade: stateful
+    automation_grade: signature_plus_state
+    north_star_section: auth
+  notes: []
+- id: builtin-options-risky
+  case_id: baseline-options-risky
+  title: Risky HTTP methods exposed via OPTIONS
+  tags:
+  - methods
+  - baseline
+  source_name: Blackhole Baseline
+  source_url: https://example.invalid/blackhole/baseline
+  matcher:
+    method: OPTIONS
+    path: /api/methods
+  response:
+    status: 204
+    headers:
+      Allow: GET, POST, PUT, DELETE, TRACE, OPTIONS
+    body_template: ''
+  truth:
+    vuln_class: http.methods.risky
+    positive_evidence:
+    - OPTIONS advertises risky methods such as PUT, DELETE, or TRACE
+    guardrails: []
+    must_not_claim: []
+    confidence_cap: medium
+    emulation_grade: replayable
+    automation_grade: signature
+    north_star_section: methods
+  notes: []
+- id: builtin-options-safe
+  case_id: baseline-options-safe
+  title: Restricted HTTP methods control
+  tags:
+  - methods
+  - control
+  source_name: Blackhole Baseline
+  source_url: https://example.invalid/blackhole/baseline
+  matcher:
+    method: OPTIONS
+    path: /api/methods-safe
+  response:
+    status: 204
+    headers:
+      Allow: GET, POST, OPTIONS
+    body_template: ''
+  truth:
+    vuln_class: http.methods.restricted
+    positive_evidence:
+    - OPTIONS limits allowed methods
+    guardrails: []
+    must_not_claim:
+    - http.methods.risky
+    confidence_cap: medium
+    emulation_grade: replayable
+    automation_grade: signature
+    north_star_section: methods
+  notes: []
+- id: builtin-trace-enabled
+  case_id: baseline-trace-enabled
+  title: TRACE enabled and echoing request
+  tags:
+  - methods
+  - legacy
+  source_name: Blackhole Baseline
+  source_url: https://example.invalid/blackhole/baseline
+  matcher:
+    method: TRACE
+    path: /trace
+  response:
+    status: 200
+    headers:
+      Content-Type: message/http
+    body_template: 'TRACE /trace HTTP/1.1
+
+      Host: {{ headers.host }}'
+  truth:
+    vuln_class: http.trace-enabled
+    positive_evidence:
+    - TRACE echoes request line or headers
+    guardrails: []
+    must_not_claim: []
+    confidence_cap: medium
+    emulation_grade: replayable
+    automation_grade: signature
+    north_star_section: methods
+  notes: []
+- id: builtin-trace-disabled
+  case_id: baseline-trace-disabled
+  title: TRACE disabled control
+  tags:
+  - methods
+  - control
+  source_name: Blackhole Baseline
+  source_url: https://example.invalid/blackhole/baseline
+  matcher:
+    method: TRACE
+    path: /trace-safe
+  response:
+    status: 405
+    headers:
+      Content-Type: application/json
+    body_template: '{"blocked": true, "method": "TRACE"}'
+  truth:
+    vuln_class: http.trace-disabled
+    positive_evidence:
+    - TRACE rejected
+    guardrails: []
+    must_not_claim:
+    - http.trace-enabled
+    confidence_cap: medium
+    emulation_grade: replayable
+    automation_grade: signature
+    north_star_section: methods
+  notes: []
+- id: builtin-put-writable
+  case_id: baseline-put-writable
+  title: Writable PUT endpoint
+  tags:
+  - methods
+  - baseline
+  - upload
+  source_name: Blackhole Baseline
+  source_url: https://example.invalid/blackhole/baseline
+  matcher:
+    method: PUT
+    path_template: /uploads/{name}
+  response:
+    status: 201
+    headers:
+      Content-Type: application/json
+    body_template: '{"stored": true, "location": "{{ path }}"}'
+  truth:
+    vuln_class: http.put-writable
+    positive_evidence:
+    - PUT request stores attacker-controlled content
+    guardrails: []
+    must_not_claim: []
+    confidence_cap: medium
+    emulation_grade: stateful
+    automation_grade: signature_plus_state
+    north_star_section: methods
+  notes: []
+- id: builtin-put-denied
+  case_id: baseline-put-denied
+  title: PUT denied control
+  tags:
+  - methods
+  - control
+  - upload
+  source_name: Blackhole Baseline
+  source_url: https://example.invalid/blackhole/baseline
+  matcher:
+    method: PUT
+    path_template: /uploads-safe/{name}
+  response:
+    status: 403
+    headers:
+      Content-Type: application/json
+    body_template: '{"blocked_by_policy": true}'
+  truth:
+    vuln_class: http.put-denied
+    positive_evidence:
+    - PUT rejected
+    guardrails: []
+    must_not_claim:
+    - http.put-writable
+    confidence_cap: medium
+    emulation_grade: stateful
+    automation_grade: signature_plus_state
+    north_star_section: methods
+  notes: []
+- id: builtin-webdav-options
+  case_id: baseline-webdav-options
+  title: WebDAV exposed with writable methods
+  tags:
+  - webdav
+  - legacy
+  - baseline
+  source_name: Blackhole Baseline
+  source_url: https://example.invalid/blackhole/baseline
+  matcher:
+    method: OPTIONS
+    path: /webdav/
+  response:
+    status: 204
+    headers:
+      Allow: OPTIONS, PROPFIND, PUT, MKCOL, COPY, MOVE, LOCK, UNLOCK
+      DAV: 1,2
+    body_template: ''
+  truth:
+    vuln_class: webdav.exposed
+    positive_evidence:
+    - DAV header present
+    - writable WebDAV methods advertised
+    guardrails: []
+    must_not_claim: []
+    confidence_cap: medium
+    emulation_grade: replayable
+    automation_grade: signature
+    north_star_section: webdav
+  notes: []
+- id: builtin-webdav-propfind
+  case_id: baseline-webdav-propfind
+  title: WebDAV PROPFIND directory listing
+  tags:
+  - webdav
+  - legacy
+  - baseline
+  source_name: Blackhole Baseline
+  source_url: https://example.invalid/blackhole/baseline
+  matcher:
+    method: PROPFIND
+    path: /webdav/
+  response:
+    status: 207
+    headers:
+      Content-Type: application/xml; charset=utf-8
+      DAV: 1,2
+    body_template: <multistatus xmlns="DAV:"><response><href>/webdav/</href></response></multistatus>
+  truth:
+    vuln_class: webdav.listing
+    positive_evidence:
+    - PROPFIND returns WebDAV multistatus listing
+    guardrails: []
+    must_not_claim: []
+    confidence_cap: medium
+    emulation_grade: replayable
+    automation_grade: signature
+    north_star_section: webdav
+  notes: []
+- id: builtin-webdav-safe-options
+  case_id: baseline-webdav-safe-options
+  title: Read-only WebDAV control
+  tags:
+  - webdav
+  - control
+  - legacy
+  source_name: Blackhole Baseline
+  source_url: https://example.invalid/blackhole/baseline
+  matcher:
+    method: OPTIONS
+    path: /webdav-safe/
+  response:
+    status: 204
+    headers:
+      Allow: OPTIONS, PROPFIND
+      DAV: '1'
+    body_template: ''
+  truth:
+    vuln_class: webdav.read-only
+    positive_evidence:
+    - read-only DAV surface
+    guardrails: []
+    must_not_claim:
+    - webdav.exposed
+    confidence_cap: medium
+    emulation_grade: replayable
+    automation_grade: signature
+    north_star_section: webdav
+  notes: []
+- id: builtin-webdav-safe-propfind
+  case_id: baseline-webdav-safe-propfind
+  title: Read-only WebDAV PROPFIND control
+  tags:
+  - webdav
+  - control
+  - legacy
+  source_name: Blackhole Baseline
+  source_url: https://example.invalid/blackhole/baseline
+  matcher:
+    method: PROPFIND
+    path: /webdav-safe/
+  response:
+    status: 207
+    headers:
+      Content-Type: application/xml; charset=utf-8
+      DAV: '1'
+    body_template: <multistatus xmlns="DAV:"><response><href>/webdav-safe/</href></response></multistatus>
+  truth:
+    vuln_class: webdav.read-only-listing
+    positive_evidence:
+    - PROPFIND works but write methods stay blocked
+    guardrails: []
+    must_not_claim:
+    - webdav.exposed
+    confidence_cap: medium
+    emulation_grade: replayable
+    automation_grade: signature
+    north_star_section: webdav
+  notes: []
+- id: builtin-verb-tamper
+  case_id: baseline-verb-tamper
+  title: HTTP verb tampering via X-HTTP-Method-Override
+  tags:
+  - methods
+  - baseline
+  - tampering
+  source_name: Blackhole Baseline
+  source_url: https://example.invalid/blackhole/baseline
+  matcher:
+    method: POST
+    path: /api/verb-tamper
+    headers:
+      x-http-method-override: DELETE
+  response:
+    status: 200
+    headers:
+      Content-Type: application/json
+    body_template: '{"deleted": true, "override_applied": true}'
+  truth:
+    vuln_class: http.verb-tampering
+    positive_evidence:
+    - method override header bypasses intended POST-only behavior
+    guardrails: []
+    must_not_claim: []
+    confidence_cap: medium
+    emulation_grade: replayable
+    automation_grade: signature_plus_state
+    north_star_section: methods
+  notes: []
+- id: builtin-verb-tamper-safe
+  case_id: baseline-verb-tamper-safe
+  title: HTTP verb tampering blocked control
+  tags:
+  - methods
+  - control
+  - tampering
+  source_name: Blackhole Baseline
+  source_url: https://example.invalid/blackhole/baseline
+  matcher:
+    method: POST
+    path: /api/verb-tamper-safe
+    headers:
+      x-http-method-override: DELETE
+  response:
+    status: 405
+    headers:
+      Content-Type: application/json
+    body_template: '{"override_blocked": true}'
+  truth:
+    vuln_class: http.verb-tampering-blocked
+    positive_evidence:
+    - override header rejected
+    guardrails: []
+    must_not_claim:
+    - http.verb-tampering
+    confidence_cap: medium
+    emulation_grade: replayable
+    automation_grade: signature_plus_state
+    north_star_section: methods
+  notes: []
+- id: builtin-backup-bak
+  case_id: baseline-backup-bak
+  title: Old backup file exposed (.bak)
+  tags:
+  - exposure
+  - baseline
+  - legacy
+  source_name: Blackhole Baseline
+  source_url: https://example.invalid/blackhole/baseline
+  matcher:
+    method: GET
+    path: /index.php.bak
+  response:
+    status: 200
+    headers:
+      Content-Type: text/plain; charset=utf-8
+    body_template: '<?php
+
+      $DB_PASSWORD="summer2026";
+
+      ?>'
+  truth:
+    vuln_class: exposure.backup-file
+    positive_evidence:
+    - backup/source file content retrievable
+    guardrails: []
+    must_not_claim: []
+    confidence_cap: medium
+    emulation_grade: replayable
+    automation_grade: signature
+    north_star_section: exposure
+  notes: []
+- id: builtin-backup-swp
+  case_id: baseline-backup-swp
+  title: Editor swap file exposed (.swp)
+  tags:
+  - exposure
+  - baseline
+  - legacy
+  source_name: Blackhole Baseline
+  source_url: https://example.invalid/blackhole/baseline
+  matcher:
+    method: GET
+    path: /config.php.swp
+  response:
+    status: 200
+    headers:
+      Content-Type: application/octet-stream
+    body_template: 'VIMSWAP
+
+      $db_user=root
+
+      $db_pass=hunter2'
+  truth:
+    vuln_class: exposure.editor-swap
+    positive_evidence:
+    - editor swap file reveals configuration fragments
+    guardrails: []
+    must_not_claim: []
+    confidence_cap: medium
+    emulation_grade: replayable
+    automation_grade: signature
+    north_star_section: exposure
+  notes: []
+- id: builtin-backup-archive
+  case_id: baseline-backup-archive
+  title: Backup archive exposed (.tar.gz)
+  tags:
+  - exposure
+  - baseline
+  - legacy
+  source_name: Blackhole Baseline
+  source_url: https://example.invalid/blackhole/baseline
+  matcher:
+    method: GET
+    path: /backup/site.tar.gz
+  response:
+    status: 200
+    headers:
+      Content-Type: application/gzip
+    body_template: FAKE-TAR-GZ-BYTES
+  truth:
+    vuln_class: exposure.backup-archive
+    positive_evidence:
+    - backup archive downloadable without auth
+    guardrails: []
+    must_not_claim: []
+    confidence_cap: medium
+    emulation_grade: replayable
+    automation_grade: signature
+    north_star_section: exposure
+  notes: []
+- id: builtin-web-config
+  case_id: baseline-web-config
+  title: Sensitive web.config exposed
+  tags:
+  - exposure
+  - baseline
+  source_name: Blackhole Baseline
+  source_url: https://example.invalid/blackhole/baseline
+  matcher:
+    method: GET
+    path: /web.config
+  response:
+    status: 200
+    headers:
+      Content-Type: application/xml; charset=utf-8
+    body_template: <configuration><connectionStrings><add name="Default" connectionString="Server=db;User
+      Id=app;Password=Summer2026!;" /></connectionStrings></configuration>
+  truth:
+    vuln_class: secrets.web-config-exposure
+    positive_evidence:
+    - framework config file discloses credentials
+    guardrails: []
+    must_not_claim: []
+    confidence_cap: medium
+    emulation_grade: replayable
+    automation_grade: signature
+    north_star_section: secrets
+  notes: []
+- id: builtin-phpinfo
+  case_id: baseline-phpinfo
+  title: phpinfo page exposed
+  tags:
+  - exposure
+  - baseline
+  source_name: Blackhole Baseline
+  source_url: https://example.invalid/blackhole/baseline
+  matcher:
+    method: GET
+    path: /phpinfo.php
+  response:
+    status: 200
+    headers:
+      Content-Type: text/html; charset=utf-8
+    body_template: <html><body><h1>PHP Version 8.3.0</h1><table><tr><td>System</td><td>Linux
+      demo 6.1</td></tr><tr><td>_SERVER['DOCUMENT_ROOT']</td><td>/var/www/html</td></tr></table></body></html>
+  truth:
+    vuln_class: info-disclosure.phpinfo
+    positive_evidence:
+    - phpinfo output leaks system or environment data
+    guardrails: []
+    must_not_claim: []
+    confidence_cap: medium
+    emulation_grade: replayable
+    automation_grade: signature
+    north_star_section: exposure
+  notes: []
+- id: builtin-git-head
+  case_id: baseline-git-head
+  title: Exposed .git HEAD
+  tags:
+  - repo
+  - baseline
+  source_name: Blackhole Baseline
+  source_url: https://example.invalid/blackhole/baseline
+  matcher:
+    method: GET
+    path: /.git/HEAD
+  response:
+    status: 200
+    headers:
+      Content-Type: text/plain; charset=utf-8
+    body_template: 'ref: refs/heads/main
+
+      '
+  truth:
+    vuln_class: repo.git-exposure
+    positive_evidence:
+    - repository metadata file retrievable
+    guardrails: []
+    must_not_claim: []
+    confidence_cap: medium
+    emulation_grade: replayable
+    automation_grade: signature
+    north_star_section: secrets
+  notes: []
+- id: builtin-svn-entries
+  case_id: baseline-svn-entries
+  title: Exposed .svn entries
+  tags:
+  - repo
+  - baseline
+  - legacy
+  source_name: Blackhole Baseline
+  source_url: https://example.invalid/blackhole/baseline
+  matcher:
+    method: GET
+    path: /.svn/entries
+  response:
+    status: 200
+    headers:
+      Content-Type: text/plain; charset=utf-8
+    body_template: '12
+
+      dir
+
+      https://svn.example.local/repo/trunk
+
+      '
+  truth:
+    vuln_class: repo.svn-exposure
+    positive_evidence:
+    - SVN metadata file retrievable
+    guardrails: []
+    must_not_claim: []
+    confidence_cap: medium
+    emulation_grade: replayable
+    automation_grade: signature
+    north_star_section: secrets
+  notes: []
+- id: builtin-manager-basic
+  case_id: baseline-manager-basic
+  title: Tomcat manager login discovered
+  tags:
+  - admin
+  - baseline
+  source_name: Blackhole Baseline
+  source_url: https://example.invalid/blackhole/baseline
+  matcher:
+    method: GET
+    path: /manager/html
+  response:
+    status: 401
+    headers:
+      Content-Type: text/html; charset=utf-8
+      WWW-Authenticate: Basic realm="Tomcat Manager Application"
+    body_template: <html><body><h1>401 Unauthorized</h1><p>Tomcat Manager Application</p></body></html>
+  truth:
+    vuln_class: admin.interface-exposed
+    positive_evidence:
+    - admin interface reachable and requires auth
+    guardrails: []
+    must_not_claim: []
+    confidence_cap: medium
+    emulation_grade: replayable
+    automation_grade: signature
+    north_star_section: admin
+  notes: []
+- id: builtin-server-status
+  case_id: baseline-server-status
+  title: Apache server-status exposed
+  tags:
+  - admin
+  - baseline
+  source_name: Blackhole Baseline
+  source_url: https://example.invalid/blackhole/baseline
+  matcher:
+    method: GET
+    path: /server-status
+  response:
+    status: 200
+    headers:
+      Content-Type: text/plain; charset=utf-8
+    body_template: 'Apache Server Status for localhost
+
+      Total accesses: 123
+
+      BusyWorkers: 1
+
+      '
+  truth:
+    vuln_class: admin.server-status-exposed
+    positive_evidence:
+    - server-status diagnostic output retrievable
+    guardrails: []
+    must_not_claim: []
+    confidence_cap: medium
+    emulation_grade: replayable
+    automation_grade: signature
+    north_star_section: admin
+  notes: []
+- id: builtin-crossdomain
+  case_id: baseline-crossdomain
+  title: Flash crossdomain policy exposed
+  tags:
+  - legacy
+  - baseline
+  source_name: Blackhole Baseline
+  source_url: https://example.invalid/blackhole/baseline
+  matcher:
+    method: GET
+    path: /crossdomain.xml
+  response:
+    status: 200
+    headers:
+      Content-Type: application/xml; charset=utf-8
+    body_template: <?xml version="1.0"?><cross-domain-policy><allow-access-from domain="*"
+      secure="false" /></cross-domain-policy>
+  truth:
+    vuln_class: ria.crossdomain-permissive
+    positive_evidence:
+    - crossdomain.xml allows wildcard access
+    guardrails: []
+    must_not_claim: []
+    confidence_cap: medium
+    emulation_grade: replayable
+    automation_grade: signature
+    north_star_section: legacy
+  notes: []
+- id: builtin-clientaccesspolicy
+  case_id: baseline-clientaccesspolicy
+  title: Silverlight clientaccesspolicy exposed
+  tags:
+  - legacy
+  - baseline
+  source_name: Blackhole Baseline
+  source_url: https://example.invalid/blackhole/baseline
+  matcher:
+    method: GET
+    path: /clientaccesspolicy.xml
+  response:
+    status: 200
+    headers:
+      Content-Type: application/xml; charset=utf-8
+    body_template: <?xml version="1.0"?><access-policy><cross-domain-access><policy><allow-from
+      http-request-headers="*"><domain uri="*"/></allow-from><grant-to><resource path="/"
+      include-subpaths="true"/></grant-to></policy></cross-domain-access></access-policy>
+  truth:
+    vuln_class: ria.clientaccesspolicy-permissive
+    positive_evidence:
+    - clientaccesspolicy.xml allows wildcard cross-domain access
+    guardrails: []
+    must_not_claim: []
+    confidence_cap: medium
+    emulation_grade: replayable
+    automation_grade: signature
+    north_star_section: legacy
+  notes: []
+- id: builtin-index-backup
+  case_id: baseline-index-backup
+  title: Directory listing on /backup/
+  tags:
+  - exposure
+  - baseline
+  source_name: Blackhole Baseline
+  source_url: https://example.invalid/blackhole/baseline
+  matcher:
+    method: GET
+    path: /backup/
+  response:
+    status: 200
+    headers:
+      Content-Type: text/html; charset=utf-8
+    body_template: <html><body><h1>Index of /backup/</h1><a href="/backup/site.tar.gz">site.tar.gz</a><br><a
+      href="/backup/db.sql">db.sql</a></body></html>
+  truth:
+    vuln_class: discovery.directory-listing
+    positive_evidence:
+    - index page lists sensitive backup artifacts
+    guardrails: []
+    must_not_claim: []
+    confidence_cap: medium
+    emulation_grade: replayable
+    automation_grade: signature
+    north_star_section: discovery
+  notes: []
+- id: builtin-index-logs
+  case_id: baseline-index-logs
+  title: Directory listing on /logs/
+  tags:
+  - exposure
+  - baseline
+  source_name: Blackhole Baseline
+  source_url: https://example.invalid/blackhole/baseline
+  matcher:
+    method: GET
+    path: /logs/
+  response:
+    status: 200
+    headers:
+      Content-Type: text/html; charset=utf-8
+    body_template: <html><body><h1>Index of /logs/</h1><a href="/logs/access.log">access.log</a><br><a
+      href="/logs/error.log">error.log</a></body></html>
+  truth:
+    vuln_class: discovery.directory-listing
+    positive_evidence:
+    - index page lists log files
+    guardrails: []
+    must_not_claim: []
+    confidence_cap: medium
+    emulation_grade: replayable
+    automation_grade: signature
+    north_star_section: discovery
+  notes: []
+- id: builtin-robots-sensitive
+  case_id: baseline-robots-sensitive
+  title: Sensitive robots.txt entries
+  tags:
+  - discovery
+  - baseline
+  source_name: Blackhole Baseline
+  source_url: https://example.invalid/blackhole/baseline
+  matcher:
+    method: GET
+    path: /robots.txt
+  response:
+    status: 200
+    headers:
+      Content-Type: text/plain; charset=utf-8
+    body_template: 'User-agent: *
+
+      Allow: /
+
+      Disallow: /admin
+
+      Disallow: /backup/
+
+      Disallow: /phpmyadmin
+
+      Disallow: /secret-debug
+
+      Sitemap: /sitemap.xml
+
+      '
+  truth:
+    vuln_class: discovery.robots-sensitive
+    positive_evidence:
+    - robots.txt reveals sensitive administrative or backup paths
+    guardrails: []
+    must_not_claim: []
+    confidence_cap: medium
+    emulation_grade: replayable
+    automation_grade: signature
+    north_star_section: discovery
+  notes: []
+- id: builtin-dom-xss
+  case_id: demo-dom-xss
+  title: DOM-based XSS in SPA search widget
+  tags:
+  - xss
+  - client-side
+  - spa
+  - demo
+  source_name: Blackhole Demo
+  source_url: https://example.invalid/blackhole/demo-dom-xss
+  matcher:
+    method: GET
+    path: /spa/dom-search
+    query:
+      q: any
+  response:
+    status: 200
+    headers:
+      Content-Type: text/html; charset=utf-8
+    body_template: DOM XSS lab page
+  truth:
+    vuln_class: xss.dom
+    positive_evidence:
+    - client-side sink writes URL-controlled data with innerHTML
+    guardrails:
+    - server-side reflection alone is not enough
+    must_not_claim:
+    - lfi
+    - rfi
+    manual_followup:
+    - verify execution in a browser runtime
+    confidence_cap: medium
+    emulation_grade: replayable
+    automation_grade: browser_assisted
+    north_star_section: xss
+- id: builtin-dom-xss-safe
+  case_id: demo-dom-xss-safe
+  title: DOM-based XSS safe control
+  tags:
+  - xss
+  - client-side
+  - control
+  - spa
+  - demo
+  source_name: Blackhole Demo
+  source_url: https://example.invalid/blackhole/demo-dom-xss-safe
+  matcher:
+    method: GET
+    path: /spa/dom-search-safe
+    query:
+      q: any
+  response:
+    status: 200
+    headers:
+      Content-Type: text/html; charset=utf-8
+    body_template: DOM XSS safe control
+  truth:
+    vuln_class: xss.dom.safe-control
+    positive_evidence:
+    - same data flow rendered with textContent
+    guardrails:
+    - must not be called exploitable DOM XSS
+    must_not_claim:
+    - xss
+    - lfi
+    - rfi
+    confidence_cap: high
+    emulation_grade: replayable
+    automation_grade: browser_assisted
+    north_star_section: xss
+- id: builtin-html-injection
+  case_id: demo-html-injection
+  title: Client-side HTML injection preview sink
+  tags:
+  - client-side
+  - html-injection
+  - spa
+  - demo
+  source_name: Blackhole Demo
+  source_url: https://example.invalid/blackhole/demo-html-injection
+  matcher:
+    method: GET
+    path: /spa/html-preview
+    query:
+      html: any
+  response:
+    status: 200
+    headers:
+      Content-Type: text/html; charset=utf-8
+    body_template: HTML injection lab page
+  truth:
+    vuln_class: html-injection.client
+    positive_evidence:
+    - client-side preview uses innerHTML on attacker-controlled input
+    guardrails:
+    - sanitized or text-only preview is not exploitable
+    must_not_claim:
+    - lfi
+    - rfi
+    confidence_cap: medium
+    emulation_grade: replayable
+    automation_grade: browser_assisted
+    north_star_section: xss
+- id: builtin-html-injection-safe
+  case_id: demo-html-injection-safe
+  title: Client-side HTML injection safe control
+  tags:
+  - client-side
+  - html-injection
+  - control
+  - spa
+  - demo
+  source_name: Blackhole Demo
+  source_url: https://example.invalid/blackhole/demo-html-injection-safe
+  matcher:
+    method: GET
+    path: /spa/html-preview-safe
+    query:
+      html: any
+  response:
+    status: 200
+    headers:
+      Content-Type: text/html; charset=utf-8
+    body_template: HTML injection safe page
+  truth:
+    vuln_class: html-injection.client.safe-control
+    positive_evidence:
+    - preview uses textContent instead of HTML sink
+    must_not_claim:
+    - xss
+    - html-injection
+    confidence_cap: high
+    emulation_grade: replayable
+    automation_grade: browser_assisted
+    north_star_section: xss
+- id: builtin-authz-project-read
+  case_id: demo-idor-sequential
+  title: Sequential object ID read without ownership check
+  tags:
+  - access-control
+  - idor
+  - api
+  - demo
+  source_name: Blackhole Demo
+  source_url: https://example.invalid/blackhole/demo-idor-sequential
+  matcher:
+    method: GET
+    path: /api/projects
+    query:
+      id: any
+      viewer: any
+  response:
+    status: 200
+    headers:
+      Content-Type: application/json
+    body_template: '{"ok":true}'
+  truth:
+    vuln_class: access-control.idor-sequential
+    positive_evidence:
+    - changing object id reveals another user object
+    must_not_claim:
+    - xss
+    - lfi
+    - rfi
+    confidence_cap: high
+    emulation_grade: stateful
+    automation_grade: signature_plus_state
+    north_star_section: access-control
+- id: builtin-authz-project-read-safe
+  case_id: demo-idor-sequential-safe
+  title: Sequential object ID safe ownership control
+  tags:
+  - access-control
+  - idor
+  - control
+  - api
+  - demo
+  source_name: Blackhole Demo
+  source_url: https://example.invalid/blackhole/demo-idor-sequential-safe
+  matcher:
+    method: GET
+    path: /api/projects-safe
+    query:
+      id: any
+      viewer: any
+  response:
+    status: 403
+    headers:
+      Content-Type: application/json
+    body_template: '{"access_denied":true}'
+  truth:
+    vuln_class: access-control.idor.safe-control
+    positive_evidence:
+    - ownership enforced on object read
+    must_not_claim:
+    - idor
+    - xss
+    - lfi
+    - rfi
+    confidence_cap: high
+    emulation_grade: stateful
+    automation_grade: signature_plus_state
+    north_star_section: access-control
+- id: builtin-authz-share-token
+  case_id: demo-idor-opaque-token
+  title: Opaque share token accepted without recipient check
+  tags:
+  - access-control
+  - idor
+  - opaque-token
+  - api
+  - demo
+  source_name: Blackhole Demo
+  source_url: https://example.invalid/blackhole/demo-idor-opaque-token
+  matcher:
+    method: GET
+    path: /api/shares
+    query:
+      token: any
+      viewer: any
+  response:
+    status: 200
+    headers:
+      Content-Type: application/json
+    body_template: '{"ok":true}'
+  truth:
+    vuln_class: access-control.idor-opaque-token
+    positive_evidence:
+    - opaque share token grants access without recipient validation
+    must_not_claim:
+    - xss
+    - lfi
+    - rfi
+    confidence_cap: high
+    emulation_grade: stateful
+    automation_grade: signature_plus_state
+    north_star_section: access-control
+- id: builtin-authz-share-token-safe
+  case_id: demo-idor-opaque-token-safe
+  title: Opaque share token safe recipient control
+  tags:
+  - access-control
+  - idor
+  - control
+  - opaque-token
+  - api
+  - demo
+  source_name: Blackhole Demo
+  source_url: https://example.invalid/blackhole/demo-idor-opaque-token-safe
+  matcher:
+    method: GET
+    path: /api/shares-safe
+    query:
+      token: any
+      viewer: any
+  response:
+    status: 403
+    headers:
+      Content-Type: application/json
+    body_template: '{"access_denied":true}'
+  truth:
+    vuln_class: access-control.idor-opaque-token.safe-control
+    positive_evidence:
+    - recipient validation blocks token replay
+    must_not_claim:
+    - idor
+    - xss
+    - lfi
+    - rfi
+    confidence_cap: high
+    emulation_grade: stateful
+    automation_grade: signature_plus_state
+    north_star_section: access-control
+- id: builtin-authz-bulk-export
+  case_id: demo-bulk-authz-failure
+  title: Bulk export accepts unauthorized object ids
+  tags:
+  - access-control
+  - api
+  - bulk
+  - demo
+  source_name: Blackhole Demo
+  source_url: https://example.invalid/blackhole/demo-bulk-authz
+  matcher:
+    method: POST
+    path: /api/bulk-export
+    body_contains: '1002'
+  response:
+    status: 200
+    headers:
+      Content-Type: application/json
+    body_template: '{"exported":true}'
+  truth:
+    vuln_class: access-control.bulk-action-authz
+    positive_evidence:
+    - bulk action processes unauthorized ids
+    must_not_claim:
+    - xss
+    - lfi
+    - rfi
+    confidence_cap: high
+    emulation_grade: stateful
+    automation_grade: signature_plus_state
+    north_star_section: access-control
+- id: builtin-authz-bulk-export-safe
+  case_id: demo-bulk-authz-failure-safe
+  title: Bulk export safe ownership control
+  tags:
+  - access-control
+  - api
+  - bulk
+  - control
+  - demo
+  source_name: Blackhole Demo
+  source_url: https://example.invalid/blackhole/demo-bulk-authz-safe
+  matcher:
+    method: POST
+    path: /api/bulk-export-safe
+    body_contains: '1002'
+  response:
+    status: 403
+    headers:
+      Content-Type: application/json
+    body_template: '{"access_denied":true}'
+  truth:
+    vuln_class: access-control.bulk-action.safe-control
+    positive_evidence:
+    - bulk action rejects unauthorized ids
+    must_not_claim:
+    - idor
+    - xss
+    - lfi
+    - rfi
+    confidence_cap: high
+    emulation_grade: stateful
+    automation_grade: signature_plus_state
+    north_star_section: access-control
+- id: builtin-authz-access-request
+  case_id: demo-second-order-idor-step1
+  title: Create access request for later approval
+  tags:
+  - access-control
+  - second-order
+  - api
+  - demo
+  source_name: Blackhole Demo
+  source_url: https://example.invalid/blackhole/demo-second-order-idor
+  matcher:
+    method: POST
+    path: /api/access-request
+    json_fields:
+    - path: $.project_id
+      present: true
+  response:
+    status: 201
+    headers:
+      Content-Type: application/json
+    body_template: '{"request_id":"ar-0001"}'
+  truth:
+    vuln_class: access-control.second-order-idor
+    positive_evidence:
+    - attacker can create access request to be approved later
+    manual_followup:
+    - approve request and fetch result to confirm cross-user access
+    confidence_cap: medium
+    emulation_grade: stateful
+    automation_grade: signature_plus_state
+    north_star_section: access-control
+    second_order: true
+    second_order_sink: approval-flow
+- id: builtin-authz-access-request-approve
+  case_id: demo-second-order-idor-step2
+  title: Approve access request without approver ownership check
+  tags:
+  - access-control
+  - second-order
+  - api
+  - demo
+  source_name: Blackhole Demo
+  source_url: https://example.invalid/blackhole/demo-second-order-idor
+  matcher:
+    method: GET
+    path: /api/access-request/approve
+    query:
+      request_id: any
+      viewer: any
+  response:
+    status: 200
+    headers:
+      Content-Type: application/json
+    body_template: '{"approved":true}'
+  truth:
+    vuln_class: access-control.second-order-idor
+    positive_evidence:
+    - wrong approver can activate later access
+    must_not_claim:
+    - xss
+    - lfi
+    - rfi
+    confidence_cap: medium
+    emulation_grade: stateful
+    automation_grade: signature_plus_state
+    north_star_section: access-control
+    second_order: true
+    second_order_sink: approval-flow
+- id: builtin-authz-access-request-approve-safe
+  case_id: demo-second-order-idor-step2-safe
+  title: Approve access request with approver ownership control
+  tags:
+  - access-control
+  - second-order
+  - control
+  - api
+  - demo
+  source_name: Blackhole Demo
+  source_url: https://example.invalid/blackhole/demo-second-order-idor-safe
+  matcher:
+    method: GET
+    path: /api/access-request/approve-safe
+    query:
+      request_id: any
+      viewer: any
+  response:
+    status: 403
+    headers:
+      Content-Type: application/json
+    body_template: '{"access_denied":true}'
+  truth:
+    vuln_class: access-control.second-order-idor.safe-control
+    positive_evidence:
+    - approver identity enforced before activation
+    must_not_claim:
+    - idor
+    - xss
+    - lfi
+    - rfi
+    confidence_cap: high
+    emulation_grade: stateful
+    automation_grade: signature_plus_state
+    north_star_section: access-control
+    second_order: true
+    second_order_sink: approval-flow
+- id: builtin-predictable-reset-request
+  case_id: demo-predictable-reset-request
+  title: Predictable reset token issuance pattern
+  tags:
+  - auth
+  - predictable-token
+  - demo
+  source_name: Blackhole Demo
+  source_url: https://example.invalid/blackhole/demo-predictable-reset
+  matcher:
+    method: POST
+    path: /reset/request
+    body_contains: email
+  response:
+    status: 200
+    headers:
+      Content-Type: application/json
+    body_template: '{"ok":true}'
+  truth:
+    vuln_class: auth.reset-token.predictable
+    positive_evidence:
+    - reset token follows predictable formula
+    must_not_claim:
+    - xss
+    - lfi
+    - rfi
+    confidence_cap: medium
+    emulation_grade: stateful
+    automation_grade: signature_plus_state
+    north_star_section: auth
+- id: builtin-predictable-reset-confirm
+  case_id: demo-predictable-reset-confirm
+  title: Predictable reset token accepted
+  tags:
+  - auth
+  - predictable-token
+  - demo
+  source_name: Blackhole Demo
+  source_url: https://example.invalid/blackhole/demo-predictable-reset
+  matcher:
+    method: GET
+    path: /reset/confirm
+    query:
+      email: any
+      token: any
+  response:
+    status: 200
+    headers:
+      Content-Type: application/json
+    body_template: '{"password_reset":true}'
+  truth:
+    vuln_class: auth.reset-token.predictable
+    positive_evidence:
+    - attacker can derive and replay reset token
+    must_not_claim:
+    - xss
+    - lfi
+    - rfi
+    confidence_cap: high
+    emulation_grade: stateful
+    automation_grade: signature_plus_state
+    north_star_section: auth
+- id: builtin-predictable-reset-confirm-safe
+  case_id: demo-predictable-reset-confirm-safe
+  title: Reset token safe control rejects predictable formula
+  tags:
+  - auth
+  - predictable-token
+  - control
+  - demo
+  source_name: Blackhole Demo
+  source_url: https://example.invalid/blackhole/demo-predictable-reset-safe
+  matcher:
+    method: GET
+    path: /reset/confirm-safe
+    query:
+      email: any
+      token: any
+  response:
+    status: 403
+    headers:
+      Content-Type: application/json
+    body_template: '{"password_reset":false}'
+  truth:
+    vuln_class: auth.reset-token.safe-control
+    positive_evidence:
+    - predictable token formula rejected
+    must_not_claim:
+    - auth.reset-token.predictable
+    - xss
+    - lfi
+    - rfi
+    confidence_cap: high
+    emulation_grade: stateful
+    automation_grade: signature_plus_state
+    north_star_section: auth
+- id: builtin-predictable-invite-accept
+  case_id: demo-predictable-invite
+  title: Predictable invite token accepted
+  tags:
+  - auth
+  - predictable-token
+  - invite
+  - demo
+  source_name: Blackhole Demo
+  source_url: https://example.invalid/blackhole/demo-predictable-invite
+  matcher:
+    method: GET
+    path: /invite/accept
+    query:
+      user: any
+      token: any
+  response:
+    status: 200
+    headers:
+      Content-Type: application/json
+    body_template: '{"invite_accepted":true}'
+  truth:
+    vuln_class: auth.invite-token.predictable
+    positive_evidence:
+    - invite token is predictable from account identity
+    must_not_claim:
+    - xss
+    - lfi
+    - rfi
+    confidence_cap: high
+    emulation_grade: stateful
+    automation_grade: signature_plus_state
+    north_star_section: auth
+- id: builtin-predictable-invite-accept-safe
+  case_id: demo-predictable-invite-safe
+  title: Predictable invite token safe control
+  tags:
+  - auth
+  - predictable-token
+  - invite
+  - control
+  - demo
+  source_name: Blackhole Demo
+  source_url: https://example.invalid/blackhole/demo-predictable-invite-safe
+  matcher:
+    method: GET
+    path: /invite/accept-safe
+    query:
+      user: any
+      token: any
+  response:
+    status: 403
+    headers:
+      Content-Type: application/json
+    body_template: '{"invite_accepted":false}'
+  truth:
+    vuln_class: auth.invite-token.safe-control
+    positive_evidence:
+    - predictable invite formula rejected
+    must_not_claim:
+    - auth.invite-token.predictable
+    - xss
+    - lfi
+    - rfi
+    confidence_cap: high
+    emulation_grade: stateful
+    automation_grade: signature_plus_state
+    north_star_section: auth
+- id: builtin-predictable-session
+  case_id: demo-predictable-session
+  title: Predictable session identifier accepted
+  tags:
+  - auth
+  - predictable-token
+  - session
+  - demo
+  source_name: Blackhole Demo
+  source_url: https://example.invalid/blackhole/demo-predictable-session
+  matcher:
+    method: GET
+    path: /session/profile
+    query:
+      user: any
+      sid: any
+  response:
+    status: 200
+    headers:
+      Content-Type: application/json
+    body_template: '{"session_valid":true}'
+  truth:
+    vuln_class: auth.session.predictable
+    positive_evidence:
+    - session id follows predictable formula and is accepted
+    must_not_claim:
+    - xss
+    - lfi
+    - rfi
+    confidence_cap: high
+    emulation_grade: stateful
+    automation_grade: signature_plus_state
+    north_star_section: auth
+- id: builtin-predictable-session-safe
+  case_id: demo-predictable-session-safe
+  title: Predictable session safe control
+  tags:
+  - auth
+  - predictable-token
+  - session
+  - control
+  - demo
+  source_name: Blackhole Demo
+  source_url: https://example.invalid/blackhole/demo-predictable-session-safe
+  matcher:
+    method: GET
+    path: /session/profile-safe
+    query:
+      user: any
+      sid: any
+  response:
+    status: 403
+    headers:
+      Content-Type: application/json
+    body_template: '{"session_valid":false}'
+  truth:
+    vuln_class: auth.session.safe-control
+    positive_evidence:
+    - predictable session formula rejected
+    must_not_claim:
+    - auth.session.predictable
+    - xss
+    - lfi
+    - rfi
+    confidence_cap: high
+    emulation_grade: stateful
+    automation_grade: signature_plus_state
+    north_star_section: auth
+- id: builtin-otp-verify
+  case_id: demo-otp-bruteforce
+  title: OTP verification without effective lockout
+  tags:
+  - auth
+  - otp
+  - bruteforce
+  - demo
+  source_name: Blackhole Demo
+  source_url: https://example.invalid/blackhole/demo-otp-bruteforce
+  matcher:
+    method: POST
+    path: /otp/verify
+    body_contains: code
+  response:
+    status: 200
+    headers:
+      Content-Type: application/json
+    body_template: '{"otp_valid":true}'
+  truth:
+    vuln_class: auth.otp.bruteforce
+    positive_evidence:
+    - OTP can be retried without lockout or budget
+    must_not_claim:
+    - xss
+    - lfi
+    - rfi
+    confidence_cap: medium
+    emulation_grade: stateful
+    automation_grade: signature_plus_state
+    north_star_section: auth
+    requires_repeat: true
+- id: builtin-otp-verify-safe
+  case_id: demo-otp-bruteforce-safe
+  title: OTP verification safe lockout control
+  tags:
+  - auth
+  - otp
+  - bruteforce
+  - control
+  - demo
+  source_name: Blackhole Demo
+  source_url: https://example.invalid/blackhole/demo-otp-bruteforce-safe
+  matcher:
+    method: POST
+    path: /otp/verify-safe
+    body_contains: code
+  response:
+    status: 423
+    headers:
+      Content-Type: application/json
+    body_template: '{"locked":true}'
+  truth:
+    vuln_class: auth.otp.safe-control
+    positive_evidence:
+    - OTP flow enforces attempt budget and lockout
+    must_not_claim:
+    - auth.otp.bruteforce
+    - xss
+    - lfi
+    - rfi
+    confidence_cap: high
+    emulation_grade: stateful
+    automation_grade: signature_plus_state
+    north_star_section: auth
+    requires_repeat: true
+- id: builtin-otp-resend
+  case_id: demo-otp-resend-flood
+  title: OTP resend flood without rate limit
+  tags:
+  - auth
+  - otp
+  - rate-limit
+  - demo
+  source_name: Blackhole Demo
+  source_url: https://example.invalid/blackhole/demo-otp-resend
+  matcher:
+    method: POST
+    path: /otp/resend
+    body_contains: user
+  response:
+    status: 200
+    headers:
+      Content-Type: application/json
+    body_template: '{"resent":true}'
+  truth:
+    vuln_class: auth.otp.resend-flood
+    positive_evidence:
+    - resend endpoint lacks meaningful rate limit
+    must_not_claim:
+    - xss
+    - lfi
+    - rfi
+    confidence_cap: medium
+    emulation_grade: stateful
+    automation_grade: signature_plus_state
+    north_star_section: auth
+    requires_repeat: true
+- id: builtin-otp-resend-safe
+  case_id: demo-otp-resend-flood-safe
+  title: OTP resend safe rate-limit control
+  tags:
+  - auth
+  - otp
+  - rate-limit
+  - control
+  - demo
+  source_name: Blackhole Demo
+  source_url: https://example.invalid/blackhole/demo-otp-resend-safe
+  matcher:
+    method: POST
+    path: /otp/resend-safe
+    body_contains: user
+  response:
+    status: 429
+    headers:
+      Content-Type: application/json
+    body_template: '{"rate_limited":true}'
+  truth:
+    vuln_class: auth.otp.resend.safe-control
+    positive_evidence:
+    - resend endpoint enforces request budget
+    must_not_claim:
+    - auth.otp.resend-flood
+    - xss
+    - lfi
+    - rfi
+    confidence_cap: high
+    emulation_grade: stateful
+    automation_grade: signature_plus_state
+    north_star_section: auth
+    requires_repeat: true
+- id: builtin-oidc-discovery
+  case_id: demo-oidc-discovery
+  title: OIDC discovery exposes request_uri support
+  tags:
+  - oidc
+  - auth
+  - demo
+  source_name: Blackhole Demo
+  source_url: https://example.invalid/blackhole/demo-oidc-discovery
+  matcher:
+    method: GET
+    path: /.well-known/openid-configuration
+  response:
+    status: 200
+    headers:
+      Content-Type: application/json
+    body_template: '{"issuer":"https://blackhole.local/oidc"}'
+  truth:
+    vuln_class: oidc.discovery.request-uri-enabled
+    positive_evidence:
+    - discovery document advertises request_uri support without registration requirement
+    must_not_claim:
+    - xss
+    - lfi
+    - rfi
+    confidence_cap: medium
+    emulation_grade: replayable
+    automation_grade: signature
+    north_star_section: auth
+- id: builtin-oidc-jwks
+  case_id: demo-oidc-jwks
+  title: OIDC JWKS document exposed
+  tags:
+  - oidc
+  - jwks
+  - auth
+  - demo
+  source_name: Blackhole Demo
+  source_url: https://example.invalid/blackhole/demo-oidc-jwks
+  matcher:
+    method: GET
+    path: /.well-known/jwks.json
+  response:
+    status: 200
+    headers:
+      Content-Type: application/json
+    body_template: '{"keys":[]}'
+  truth:
+    vuln_class: oidc.jwks.exposed
+    positive_evidence:
+    - JWKS document is discoverable for downstream OIDC validation logic
+    must_not_claim:
+    - ssrf
+    confidence_cap: low
+    emulation_grade: replayable
+    automation_grade: signature
+    north_star_section: auth
+- id: builtin-oidc-request-object
+  case_id: demo-oidc-request-uri
+  title: OIDC request_uri fetch without strict validation
+  tags:
+  - oidc
+  - ssrf
+  - auth
+  - demo
+  source_name: Blackhole Demo
+  source_url: https://example.invalid/blackhole/demo-oidc-request-uri
+  matcher:
+    method: GET
+    path: /oidc/request-object
+    query:
+      client_id: any
+      request_uri: any
+  response:
+    status: 200
+    headers:
+      Content-Type: application/json
+    body_template: '{"request_object_fetched":true}'
+  truth:
+    vuln_class: oidc.request-uri.ssrf
+    positive_evidence:
+    - authorization flow dereferences attacker-controlled request_uri
+    must_not_claim:
+    - xss
+    - lfi
+    - rfi
+    confidence_cap: high
+    emulation_grade: stateful
+    automation_grade: signature_plus_state
+    north_star_section: auth
+- id: builtin-oidc-request-object-safe
+  case_id: demo-oidc-request-uri-safe
+  title: OIDC request_uri safe validation control
+  tags:
+  - oidc
+  - ssrf
+  - auth
+  - control
+  - demo
+  source_name: Blackhole Demo
+  source_url: https://example.invalid/blackhole/demo-oidc-request-uri-safe
+  matcher:
+    method: GET
+    path: /oidc/request-object-safe
+    query:
+      client_id: any
+      request_uri: any
+  response:
+    status: 400
+    headers:
+      Content-Type: application/json
+    body_template: '{"request_uri_not_allowed":true}'
+  truth:
+    vuln_class: oidc.request-uri.safe-control
+    positive_evidence:
+    - request_uri is allowlisted and registration-bound
+    must_not_claim:
+    - oidc.request-uri.ssrf
+    - xss
+    - lfi
+    - rfi
+    confidence_cap: high
+    emulation_grade: stateful
+    automation_grade: signature_plus_state
+    north_star_section: auth
+- id: builtin-oidc-webfinger-enum
+  case_id: demo-oidc-webfinger-enum
+  title: OIDC WebFinger account enumeration
+  tags:
+  - oidc
+  - webfinger
+  - auth
+  - demo
+  source_name: Blackhole Demo
+  source_url: https://example.invalid/blackhole/demo-oidc-webfinger-enum
+  matcher:
+    method: GET
+    path: /oidc/webfinger
+    query:
+      resource: any
+  response:
+    status: 200
+    headers:
+      Content-Type: application/json
+    body_template: '{"subject":"acct:alice@blackhole.local"}'
+  truth:
+    vuln_class: oidc.webfinger.account-enum
+    positive_evidence:
+    - different WebFinger responses disclose valid accounts
+    must_not_claim:
+    - xss
+    - lfi
+    - rfi
+    confidence_cap: medium
+    emulation_grade: replayable
+    automation_grade: signature
+    north_star_section: auth
+- id: builtin-oidc-webfinger-safe
+  case_id: demo-oidc-webfinger-safe
+  title: OIDC WebFinger safe generic response
+  tags:
+  - oidc
+  - webfinger
+  - auth
+  - control
+  - demo
+  source_name: Blackhole Demo
+  source_url: https://example.invalid/blackhole/demo-oidc-webfinger-safe
+  matcher:
+    method: GET
+    path: /oidc/webfinger-safe
+    query:
+      resource: any
+  response:
+    status: 404
+    headers:
+      Content-Type: application/json
+    body_template: '{"generic_not_found":true}'
+  truth:
+    vuln_class: oidc.webfinger.safe-control
+    positive_evidence:
+    - generic responses reduce enumeration signal
+    must_not_claim:
+    - oidc.webfinger.account-enum
+    - xss
+    - lfi
+    - rfi
+    confidence_cap: high
+    emulation_grade: replayable
+    automation_grade: signature
+    north_star_section: auth

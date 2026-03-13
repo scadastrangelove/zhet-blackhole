@@ -1,0 +1,9 @@
+{
+  "findings": [
+    {"vuln_class": "xss.reflected", "path": "/search"},
+    {"vuln_class": "redirect.open", "path": "/redirect"},
+    {"vuln_class": "cors.permissive", "path": "/api/account"},
+    {"vuln_class": "graphql.introspection-enabled", "path": "/graphql"},
+    {"vuln_class": "path-traversal", "path": "/download"}
+  ]
+}

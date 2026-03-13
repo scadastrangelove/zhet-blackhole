@@ -1,0 +1,20 @@
+{
+  "name": "public-cases-v4-secondorder-themed-slice",
+  "records_total": 17,
+  "by_section": {
+    "ssrf": 9,
+    "file-access": 1,
+    "auth": 6,
+    "access-control": 1
+  },
+  "files": {
+    "jsonl": "data/public_cases_v4_secondorder_additions.jsonl",
+    "csv": "data/public_cases_v4_secondorder_additions.csv",
+    "merged_jsonl": "data/public_cases_v1_plus_secondorder_v4.jsonl",
+    "merged_csv": "data/public_cases_v1_plus_secondorder_v4.csv"
+  },
+  "notes": [
+    "Second-order webhook/import/OAuth-focused public case additions on top of the included v1 corpus.",
+    "Most endpoint patterns and seed params are heuristic unless explicitly stated in the public source summary or research article."
+  ]
+}
