@@ -3,12 +3,7 @@
 > A black-box scanner sends its prayers into the dark.  
 > Blackhole answers with pages, headers, flows, lies, half-truths, and—when needed—the unpleasant courtesy of ground truth.
 
-Release OST: Zhet - Overrun 
-<audio controls>
-  <source src="Zhet - Overrun.mp3" type="audio/mpeg">
-  Your browser does not support the audio element.
-</audio>
-
+Release OST: [Zhet - Overrun](Zhet - Overrun.mp3)  
 
 ![ZT Blackhole logo](blackhole-logo.jpg)
 
